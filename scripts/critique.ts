@@ -1,6 +1,17 @@
 import { CritiqueResult } from './types';
-import { stat } from 'fs/promises';
 import { join } from 'path';
+import { stat } from 'fs/promises';
+import { evaluateTechnical } from './critics/technicalCritic';
+import { evaluateTaste, TasteCriticResult } from './critics/tasteCritic';
+
+function convertTasteResult(tasteResult: TasteCriticResult): CritiqueResult['taste'] {
+  return {
+    pass: tasteResult.pass,
+    scores: tasteResult.scores,
+    issues: tasteResult.issues,
+    cheapSignals: tasteResult.cheapSignals.length > 0 ? tasteResult.cheapSignals : undefined,
+  };
+}
 
 export async function critique(outputPath: string): Promise<CritiqueResult> {
   const outputDir = join(process.cwd(), 'outputs', 'latest');
@@ -16,10 +27,13 @@ export async function critique(outputPath: string): Promise<CritiqueResult> {
       taste: {
         pass: false,
         scores: {
-          visualHierarchy: 0,
           confidence: 0,
+          restraint: 0,
+          visualHierarchy: 0,
+          cognitiveCalm: 0,
+          brandSeriousness: 0,
+          signatureAlignment: 0,
           copyClarity: false,
-          restraint: false,
         },
         issues: ['Cannot critique non-existent output'],
       },
@@ -27,21 +41,15 @@ export async function critique(outputPath: string): Promise<CritiqueResult> {
     };
   }
 
+  const technical = await evaluateTechnical(outputDir);
+  const tasteResult = await evaluateTaste(outputDir);
+  const taste = convertTasteResult(tasteResult);
+
+  const overall = technical.pass && taste.pass;
+
   return {
-    technical: {
-      pass: true,
-      issues: [],
-    },
-    taste: {
-      pass: true,
-      scores: {
-        visualHierarchy: 8,
-        confidence: 8,
-        copyClarity: true,
-        restraint: true,
-      },
-      issues: [],
-    },
-    overall: true,
+    technical,
+    taste,
+    overall,
   };
 }

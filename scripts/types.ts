@@ -1,7 +1,3 @@
-/**
- * Shared Type Definitions
- */
-
 export interface CritiqueResult {
   technical: {
     pass: boolean;
@@ -10,12 +6,42 @@ export interface CritiqueResult {
   taste: {
     pass: boolean;
     scores: {
-      visualHierarchy: number;
       confidence: number;
+      restraint: number;
+      visualHierarchy: number;
+      cognitiveCalm: number;
+      brandSeriousness: number;
+      signatureAlignment: number;
       copyClarity: boolean;
-      restraint: boolean;
     };
     issues: string[];
+    cheapSignals?: string[];
   };
   overall: boolean;
+}
+
+export interface ApprovalRecord {
+  id: string;
+  timestamp: string;
+  intent: string;
+  critiqueResult: CritiqueResult;
+  humanFeedback?: string;
+}
+
+export interface RejectionRecord {
+  id: string;
+  timestamp: string;
+  intent: string;
+  critiqueResult: CritiqueResult;
+  humanFeedback: string;
+  criticDisagreement?: string;
+}
+
+export interface AntiPattern {
+  pattern: string;
+  occurrences: number;
+  lastSeen: string;
+  examples: string[];
+  category?: string;
+  severity?: number;
 }

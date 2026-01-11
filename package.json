@@ -7,7 +7,8 @@
     "generate": "tsx scripts/generate.ts",
     "interpret": "tsx scripts/interpret.ts",
     "plan": "tsx scripts/plan.ts",
-    "critique": "tsx scripts/critique.ts"
+    "critique": "tsx scripts/critique.ts",
+    "studio": "tsx scripts/studio.ts"
   },
   "dependencies": {
     "dotenv": "^16.0.0"

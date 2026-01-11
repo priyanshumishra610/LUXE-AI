@@ -1,11 +1,14 @@
-import { interpret } from './interpret';
-import { plan } from './plan';
-import { critique } from './critique';
-import { regenerate } from './regenerate';
-import { loadPrompt } from './utils/promptLoader';
-import { callLLM } from './utils/llm';
-import { writeFileToOutput } from './utils/fileWriter';
-import { logger } from './utils/logger';
+import { intake } from './intake';
+import { normalize } from './normalize';
+import { plan } from '../plan';
+import { critique } from '../critique';
+import { regenerate } from '../regenerate';
+import { requestApproval } from './approval';
+import { loadPrompt } from '../utils/promptLoader';
+import { callLLM } from '../utils/llm';
+import { writeFileToOutput } from '../utils/fileWriter';
+import { logger } from '../utils/logger';
+import { getAntiPatternSummary } from '../memory/antiPatterns';
 
 async function writeGeneratedCode(generatedCode: string): Promise<void> {
   const codeBlockRegex = /```(?:[\w]+)?\n([\s\S]*?)```/g;
@@ -24,11 +27,15 @@ async function writeGeneratedCode(generatedCode: string): Promise<void> {
   }
 }
 
-export async function generate(rawIntent: string): Promise<void> {
-  logger.info('Starting generation process');
+export async function executeWorkflow(clientInput: string): Promise<void> {
+  logger.info('Starting studio workflow');
   
-  const interpretedIntent = await interpret(rawIntent);
-  logger.info('Intent interpreted');
+  const request = await intake(clientInput);
+  const interpretedIntent = await normalize(request);
+  logger.info('Intent normalized');
+  
+  const antiPatterns = await getAntiPatternSummary();
+  logger.info(antiPatterns);
   
   let sitePlan = await plan(interpretedIntent);
   logger.info('Site structure planned');
@@ -54,7 +61,16 @@ export async function generate(rawIntent: string): Promise<void> {
     
     if (result.overall) {
       logger.info('Generation complete and passed critique');
-      return;
+      
+      const approval = await requestApproval(clientInput, result);
+      
+      if (approval.approved) {
+        logger.info('Workflow complete - approved');
+        return;
+      } else {
+        logger.info('Workflow complete - rejected');
+        return;
+      }
     }
 
     if (attemptCount < maxAttempts) {
@@ -68,8 +84,14 @@ export async function generate(rawIntent: string): Promise<void> {
   }
 
   const finalResult = await critique('');
-  logger.error('Generation failed after maximum attempts');
-  logger.error(`Technical issues: ${finalResult.technical.issues.join(', ')}`);
-  logger.error(`Taste issues: ${finalResult.taste.issues.join(', ')}`);
-  throw new Error('Generation failed quality critique after regeneration');
+  
+  if (!finalResult.overall) {
+    logger.error('Generation failed after maximum attempts');
+    logger.error(`Technical issues: ${finalResult.technical.issues.join(', ')}`);
+    logger.error(`Taste issues: ${finalResult.taste.issues.join(', ')}`);
+    throw new Error('Generation failed quality critique after regeneration');
+  }
+  
+  const approval = await requestApproval(clientInput, finalResult);
+  logger.info(`Workflow complete - ${approval.approved ? 'approved' : 'rejected'}`);
 }
