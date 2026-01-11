@@ -1,0 +1,7 @@
+node_modules/
+dist/
+outputs/latest/
+outputs/archive/
+.env
+.DS_Store
+*.log
