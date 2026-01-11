@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
+import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Next.js Base',
-  description: 'Base template for LUXE AI generated sites',
+  title: 'LUXE AI',
+  description: 'Premium site generation',
 }
 
 export default function RootLayout({

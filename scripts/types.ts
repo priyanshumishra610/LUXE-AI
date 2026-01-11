@@ -16,6 +16,7 @@ export interface CritiqueResult {
     };
     issues: string[];
     cheapSignals?: string[];
+    severity?: 'minor' | 'major' | 'fatal';
   };
   overall: boolean;
 }

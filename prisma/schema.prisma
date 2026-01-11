@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String?
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  projects      Project[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  userId      String
+  intent      String
+  interpretedIntent Json
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  decisions   Decision[]
+  confidenceScores ConfidenceScore[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Decision {
+  id            String   @id @default(cuid())
+  projectId     String
+  type          String
+  plan          Json?
+  critiqueResult Json
+  approved      Boolean
+  humanFeedback String?
+  createdAt     DateTime @default(now())
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  criticReports CriticReport[]
+  trainingSample TrainingSample?
+
+  @@index([projectId])
+  @@index([approved])
+}
+
+model CriticReport {
+  id            String   @id @default(cuid())
+  decisionId    String
+  criticType    String
+  pass          Boolean
+  scores        Json
+  issues        String[]
+  rationale     String
+  createdAt     DateTime @default(now())
+  decision      Decision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+
+  @@index([decisionId])
+  @@index([criticType])
+}
+
+model AntiPattern {
+  id          String   @id @default(cuid())
+  pattern     String
+  category    String?
+  occurrences Int      @default(1)
+  severity    Int?
+  lastSeen    DateTime @default(now())
+  examples    String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([pattern])
+  @@index([category])
+  @@index([lastSeen])
+}
+
+model ConfidenceScore {
+  id          String   @id @default(cuid())
+  projectId   String
+  stage       String
+  score       Float
+  factors     String[]
+  createdAt   DateTime @default(now())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([stage])
+}
+
+model TrainingSample {
+  id            String   @id @default(cuid())
+  decisionId    String   @unique
+  intent        String
+  plan          Json
+  critiqueResult Json
+  approved      Boolean
+  humanFeedback String?
+  criticRationale String
+  label         String
+  exported      Boolean  @default(false)
+  exportedAt    DateTime?
+  createdAt     DateTime @default(now())
+  decision      Decision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+
+  @@index([approved])
+  @@index([exported])
+  @@index([label])
+}

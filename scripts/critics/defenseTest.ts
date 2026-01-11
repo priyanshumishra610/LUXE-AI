@@ -5,6 +5,7 @@ export interface DefenseResult {
   passes: boolean;
   justification: string;
   issues: string[];
+  severity: 'minor' | 'major' | 'fatal';
 }
 
 export async function testDefense(code: string, structure: string): Promise<DefenseResult> {
@@ -23,10 +24,16 @@ For each significant design choice (sections, components, layout, colors, typogr
 2. Is this choice necessary or decorative?
 3. Does this serve a clear purpose?
 
+Classify failures:
+- fatal: Cannot be justified, fundamentally wrong direction
+- major: Multiple unjustified choices, significant waste
+- minor: One or two questionable choices
+
 Output JSON with:
 - passes: boolean (true only if ALL choices are justified)
 - justification: string (brief explanation)
 - issues: array of strings (unjustified choices)
+- severity: string (fatal/major/minor if fails)
 
 Be strict. Premium work must justify complexity.`;
 
@@ -38,21 +45,25 @@ Be strict. Premium work must justify complexity.`;
       passes: false,
       justification: 'Failed to parse defense test response',
       issues: ['Cannot evaluate defense'],
+      severity: 'fatal',
     };
   }
 
   try {
     const parsed = JSON.parse(jsonMatch[0]);
+    const severity = parsed.severity || 'major';
     return {
       passes: parsed.passes === true,
       justification: parsed.justification || '',
       issues: Array.isArray(parsed.issues) ? parsed.issues : [],
+      severity: severity === 'fatal' || severity === 'major' || severity === 'minor' ? severity : 'major',
     };
   } catch {
     return {
       passes: false,
       justification: 'Failed to parse defense test JSON',
       issues: ['Parse error'],
+      severity: 'fatal',
     };
   }
 }

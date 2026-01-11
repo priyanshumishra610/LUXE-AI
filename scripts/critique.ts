@@ -10,6 +10,7 @@ function convertTasteResult(tasteResult: TasteCriticResult): CritiqueResult['tas
     scores: tasteResult.scores,
     issues: tasteResult.issues,
     cheapSignals: tasteResult.cheapSignals.length > 0 ? tasteResult.cheapSignals : undefined,
+    severity: tasteResult.severity,
   };
 }
 
@@ -36,6 +37,7 @@ export async function critique(outputPath: string): Promise<CritiqueResult> {
           copyClarity: false,
         },
         issues: ['Cannot critique non-existent output'],
+        severity: 'fatal',
       },
       overall: false,
     };
@@ -52,4 +54,29 @@ export async function critique(outputPath: string): Promise<CritiqueResult> {
     taste,
     overall,
   };
+}
+
+export function getCritiqueConfidence(result: CritiqueResult): number {
+  if (result.overall) {
+    return 0.9;
+  }
+
+  if (result.taste.severity === 'fatal') {
+    return 0.1;
+  }
+
+  if (result.taste.severity === 'major') {
+    return 0.3;
+  }
+
+  const avgScore = (
+    result.taste.scores.confidence +
+    result.taste.scores.restraint +
+    result.taste.scores.visualHierarchy +
+    result.taste.scores.cognitiveCalm +
+    result.taste.scores.brandSeriousness +
+    result.taste.scores.signatureAlignment
+  ) / 6;
+
+  return avgScore / 10;
 }

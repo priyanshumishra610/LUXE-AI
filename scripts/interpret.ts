@@ -1,5 +1,5 @@
 import { loadPrompt } from './utils/promptLoader';
-import { callLLM } from './utils/llm';
+import { routeLLM } from './models/modelRouter';
 
 export interface InterpretedIntent {
   goal: string;
@@ -13,7 +13,7 @@ export async function interpret(rawIntent: string): Promise<InterpretedIntent> {
   const promptTemplate = await loadPrompt('intent-interpreter');
   const fullPrompt = `${promptTemplate}\n\nUser input:\n${rawIntent}\n\nOutput JSON only:`;
 
-  const response = await callLLM(fullPrompt);
+  const response = await routeLLM(fullPrompt, { temperature: 0.3, maxTokens: 1500 });
   
   const jsonMatch = response.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {

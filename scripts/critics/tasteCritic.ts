@@ -3,8 +3,7 @@ import { join, extname } from 'path';
 import { loadPrompt } from '../utils/promptLoader';
 import { callLLM } from '../utils/llm';
 import { getAntiPatternSummary } from '../memory/antiPatterns';
-import { detectCheapSignals, hasCheapSignals } from './cheapSignals';
-import { evaluateSignature } from './signatureBias';
+import { detectCheapSignals, hasCheapSignals, hasFatalSignals, detectMultipleNarratives, detectFirstScreenIssues } from './cheapSignals';
 import { testDefense } from './defenseTest';
 
 export interface TasteCriticResult {
@@ -28,9 +27,41 @@ export interface TasteCriticResult {
   };
   issues: string[];
   cheapSignals: string[];
+  severity: 'minor' | 'major' | 'fatal';
 }
 
 const MIN_SCORE = 8;
+
+import { DefenseResult } from './defenseTest';
+
+function determineSeverity(signals: ReturnType<typeof detectCheapSignals>, defenseResult: DefenseResult, scores: number[]): 'minor' | 'major' | 'fatal' {
+  if (hasFatalSignals(signals)) {
+    return 'fatal';
+  }
+  
+  if (!defenseResult.passes && defenseResult.severity === 'fatal') {
+    return 'fatal';
+  }
+  
+  const minScore = Math.min(...scores);
+  if (minScore < 6) {
+    return 'fatal';
+  }
+  
+  if (hasCheapSignals(signals)) {
+    return 'major';
+  }
+  
+  if (!defenseResult.passes) {
+    return defenseResult.severity;
+  }
+  
+  if (minScore < MIN_SCORE) {
+    return 'major';
+  }
+  
+  return 'minor';
+}
 
 export async function evaluateTaste(outputDir: string): Promise<TasteCriticResult> {
   const files = await readdir(outputDir, { recursive: true });
@@ -61,6 +92,7 @@ export async function evaluateTaste(outputDir: string): Promise<TasteCriticResul
       },
       issues: ['No code files found in output'],
       cheapSignals: [],
+      severity: 'fatal',
     };
   }
 
@@ -91,7 +123,117 @@ export async function evaluateTaste(outputDir: string): Promise<TasteCriticResul
 
   const cheapSignalsResult = detectCheapSignals(allCode, allCopy);
   const hasCheap = hasCheapSignals(cheapSignalsResult);
+  const fatalSignals = hasFatalSignals(cheapSignalsResult);
   
+  if (fatalSignals) {
+    const cheapList = cheapSignalsResult.filter(s => s.detected && s.severity === 'fatal').map(s => s.reason);
+    return {
+      pass: false,
+      scores: {
+        confidence: 0,
+        restraint: 0,
+        visualHierarchy: 0,
+        cognitiveCalm: 0,
+        brandSeriousness: 0,
+        signatureAlignment: 0,
+        copyClarity: false,
+      },
+      reasons: {
+        confidence: 'Fatal cheap signals detected',
+        restraint: 'Fatal cheap signals detected',
+        visualHierarchy: 'Fatal cheap signals detected',
+        cognitiveCalm: 'Fatal cheap signals detected',
+        brandSeriousness: 'Fatal cheap signals detected',
+        signatureAlignment: 'Fatal cheap signals detected',
+      },
+      issues: ['Fatal cheap signals detected - instant fail'],
+      cheapSignals: cheapList,
+      severity: 'fatal',
+    };
+  }
+
+  const multipleNarratives = detectMultipleNarratives(allCopy);
+  if (multipleNarratives) {
+    return {
+      pass: false,
+      scores: {
+        confidence: 0,
+        restraint: 0,
+        visualHierarchy: 0,
+        cognitiveCalm: 0,
+        brandSeriousness: 0,
+        signatureAlignment: 0,
+        copyClarity: false,
+      },
+      reasons: {
+        confidence: 'Multiple narratives detected',
+        restraint: 'Multiple narratives detected',
+        visualHierarchy: 'Multiple narratives detected',
+        cognitiveCalm: 'Multiple narratives detected',
+        brandSeriousness: 'Multiple narratives detected',
+        signatureAlignment: 'Multiple narratives detected',
+      },
+      issues: ['Multiple competing narratives - violates single narrative rule'],
+      cheapSignals: [],
+      severity: 'fatal',
+    };
+  }
+
+  const firstScreenIssue = detectFirstScreenIssues(allCode);
+  if (firstScreenIssue.hasIssue) {
+    return {
+      pass: false,
+      scores: {
+        confidence: 0,
+        restraint: 0,
+        visualHierarchy: 0,
+        cognitiveCalm: 0,
+        brandSeriousness: 0,
+        signatureAlignment: 0,
+        copyClarity: false,
+      },
+      reasons: {
+        confidence: 'First screen hierarchy failed',
+        restraint: 'First screen hierarchy failed',
+        visualHierarchy: firstScreenIssue.issue,
+        cognitiveCalm: 'First screen hierarchy failed',
+        brandSeriousness: 'First screen hierarchy failed',
+        signatureAlignment: 'First screen hierarchy failed',
+      },
+      issues: [`First screen absolutism: ${firstScreenIssue.issue}`],
+      cheapSignals: [],
+      severity: 'fatal',
+    };
+  }
+
+  const defenseResult = await testDefense(allCode, structure);
+  
+  if (!defenseResult.passes && defenseResult.severity === 'fatal') {
+    return {
+      pass: false,
+      scores: {
+        confidence: 0,
+        restraint: 0,
+        visualHierarchy: 0,
+        cognitiveCalm: 0,
+        brandSeriousness: 0,
+        signatureAlignment: 0,
+        copyClarity: false,
+      },
+      reasons: {
+        confidence: 'Defense test failed fatally',
+        restraint: 'Defense test failed fatally',
+        visualHierarchy: 'Defense test failed fatally',
+        cognitiveCalm: 'Defense test failed fatally',
+        brandSeriousness: 'Defense test failed fatally',
+        signatureAlignment: 'Defense test failed fatally',
+      },
+      issues: [...defenseResult.issues, 'Design choices cannot be justified over simpler alternatives'],
+      cheapSignals: [],
+      severity: 'fatal',
+    };
+  }
+
   if (hasCheap) {
     const cheapList = cheapSignalsResult.filter(s => s.detected).map(s => s.reason);
     return {
@@ -113,36 +255,9 @@ export async function evaluateTaste(outputDir: string): Promise<TasteCriticResul
         brandSeriousness: 'Cheap signals detected',
         signatureAlignment: 'Cheap signals detected',
       },
-      issues: ['Cheap signals detected - instant fail'],
+      issues: ['Cheap signals detected'],
       cheapSignals: cheapList,
-    };
-  }
-
-  const signatureScore = evaluateSignature(allCode, structure);
-  const defenseResult = await testDefense(allCode, structure);
-  
-  if (!defenseResult.passes) {
-    return {
-      pass: false,
-      scores: {
-        confidence: 0,
-        restraint: 0,
-        visualHierarchy: 0,
-        cognitiveCalm: 0,
-        brandSeriousness: 0,
-        signatureAlignment: 0,
-        copyClarity: false,
-      },
-      reasons: {
-        confidence: 'Defense test failed',
-        restraint: 'Defense test failed',
-        visualHierarchy: 'Defense test failed',
-        cognitiveCalm: 'Defense test failed',
-        brandSeriousness: 'Defense test failed',
-        signatureAlignment: 'Defense test failed',
-      },
-      issues: [...defenseResult.issues, 'Design choices cannot be justified over simpler alternatives'],
-      cheapSignals: [],
+      severity: 'major',
     };
   }
 
@@ -172,13 +287,13 @@ ${codeSample.substring(0, 12000)}
 Evaluate these 6 dimensions (each 0-10, MINIMUM 8 to pass):
 
 1. CONFIDENCE: Calm, assured, non-needy. No begging language.
-2. RESTRAINT: Fewer sections preferred. No visual clutter.
-3. VISUAL HIERARCHY: Obvious focal point in first screen. Clear reading order.
-4. COGNITIVE CALM: Page feels quiet, not busy. No unnecessary variation.
+2. RESTRAINT: Fewer sections preferred. No visual clutter. Strong bias against section stacking.
+3. VISUAL HIERARCHY: Obvious focal point in first screen. Clear reading order. Single narrative.
+4. COGNITIVE CALM: Page feels quiet, not busy. No unnecessary variation. No decorative symmetry.
 5. BRAND SERIOUSNESS: Would this embarrass a premium brand? Would this feel cheap?
 6. SIGNATURE ALIGNMENT: Does this feel like LUXE AI output? Would this pass unnoticed as generic?
 
-COPY CLARITY (Pass/Fail): Is value clear within 5 seconds? No buzzwords?
+COPY CLARITY (Pass/Fail): Is value clear within 5 seconds? No buzzwords? Excessive copy fails.
 
 Output JSON with:
 - scores: object with confidence, restraint, visualHierarchy, cognitiveCalm, brandSeriousness, signatureAlignment (each 0-10), copyClarity (boolean)
@@ -212,6 +327,7 @@ ANY score < 8 = FAIL. Be strict.`;
       },
       issues: ['Failed to parse taste critic response'],
       cheapSignals: [],
+      severity: 'fatal',
     };
   }
 
@@ -238,6 +354,8 @@ ANY score < 8 = FAIL. Be strict.`;
       issues.push(`Minimum score threshold not met (minimum: ${MIN_SCORE}, lowest: ${minScore})`);
     }
 
+    const severity = determineSeverity(cheapSignalsResult, defenseResult, allScores);
+
     return {
       pass,
       scores: {
@@ -259,6 +377,7 @@ ANY score < 8 = FAIL. Be strict.`;
       },
       issues,
       cheapSignals: [],
+      severity,
     };
   } catch {
     return {
@@ -282,6 +401,7 @@ ANY score < 8 = FAIL. Be strict.`;
       },
       issues: ['Failed to parse taste critic JSON'],
       cheapSignals: [],
+      severity: 'fatal',
     };
   }
 }

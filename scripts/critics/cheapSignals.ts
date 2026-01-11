@@ -2,6 +2,7 @@ export interface CheapSignal {
   detected: boolean;
   signal: string;
   reason: string;
+  severity: 'minor' | 'major' | 'fatal';
 }
 
 const STARTUP_CLICHES = [
@@ -28,14 +29,6 @@ const NEEDY_LANGUAGE = [
   'best-in-class',
 ];
 
-const VISUAL_NOISE_INDICATORS = [
-  'gradient',
-  'animation',
-  'hover effect',
-  'transition',
-  'transform',
-];
-
 export function detectCheapSignals(code: string, copy: string): CheapSignal[] {
   const signals: CheapSignal[] = [];
   const lowerCode = code.toLowerCase();
@@ -47,6 +40,7 @@ export function detectCheapSignals(code: string, copy: string): CheapSignal[] {
         detected: true,
         signal: 'startup-cliche',
         reason: `Contains startup cliché: "${cliche}"`,
+        severity: 'fatal',
       });
     }
   }
@@ -57,6 +51,7 @@ export function detectCheapSignals(code: string, copy: string): CheapSignal[] {
         detected: true,
         signal: 'needy-copy',
         reason: `Contains needy language: "${needy}"`,
+        severity: 'fatal',
       });
     }
   }
@@ -67,6 +62,7 @@ export function detectCheapSignals(code: string, copy: string): CheapSignal[] {
       detected: true,
       signal: 'multiple-ctas',
       reason: `Found ${ctaCount} CTAs competing for attention`,
+      severity: 'fatal',
     });
   }
 
@@ -76,6 +72,7 @@ export function detectCheapSignals(code: string, copy: string): CheapSignal[] {
       detected: true,
       signal: 'decorative-gradients',
       reason: `${gradientCount} gradients detected without clear hierarchy purpose`,
+      severity: 'major',
     });
   }
 
@@ -85,6 +82,7 @@ export function detectCheapSignals(code: string, copy: string): CheapSignal[] {
       detected: true,
       signal: 'excessive-animation',
       reason: `${animationCount} animations detected, suggests visual noise`,
+      severity: 'major',
     });
   }
 
@@ -94,6 +92,7 @@ export function detectCheapSignals(code: string, copy: string): CheapSignal[] {
       detected: true,
       signal: 'too-many-sections',
       reason: `${sectionCount} sections detected, lacks restraint`,
+      severity: 'major',
     });
   }
 
@@ -102,6 +101,7 @@ export function detectCheapSignals(code: string, copy: string): CheapSignal[] {
       detected: true,
       signal: 'placeholder-text',
       reason: 'Contains placeholder text',
+      severity: 'fatal',
     });
   }
 
@@ -111,6 +111,7 @@ export function detectCheapSignals(code: string, copy: string): CheapSignal[] {
       detected: true,
       signal: 'too-many-colors',
       reason: `${colorCount} color definitions, exceeds 3 primary colors rule`,
+      severity: 'major',
     });
   }
 
@@ -119,4 +120,53 @@ export function detectCheapSignals(code: string, copy: string): CheapSignal[] {
 
 export function hasCheapSignals(signals: CheapSignal[]): boolean {
   return signals.some(s => s.detected);
+}
+
+export function hasFatalSignals(signals: CheapSignal[]): boolean {
+  return signals.some(s => s.detected && s.severity === 'fatal');
+}
+
+export function detectMultipleNarratives(copy: string): boolean {
+  const lower = copy.toLowerCase();
+  const narratives = [
+    'about',
+    'features',
+    'testimonials',
+    'pricing',
+    'contact',
+    'services',
+    'products',
+    'portfolio',
+  ];
+  
+  const found = narratives.filter(n => lower.includes(n));
+  return found.length > 4;
+}
+
+export function detectFirstScreenIssues(code: string): { hasIssue: boolean; issue: string } {
+  const lower = code.toLowerCase();
+  
+  const h1Count = (code.match(/<h1/gi) || []).length;
+  if (h1Count === 0) {
+    return { hasIssue: true, issue: 'No H1 found in first screen' };
+  }
+  if (h1Count > 1) {
+    return { hasIssue: true, issue: 'Multiple H1s competing for hierarchy' };
+  }
+  
+  const competingElements = (lower.match(/<h[2-6]|<section|<div.*class.*section/gi) || []).length;
+  if (competingElements > 4) {
+    return { hasIssue: true, issue: 'Too many competing elements in first screen' };
+  }
+  
+  const heroPattern = code.match(/<main[^>]*>[\s\S]{0,2000}<\/main>/i);
+  if (heroPattern) {
+    const heroContent = heroPattern[0];
+    const buttonCount = (heroContent.match(/button|cta|btn/gi) || []).length;
+    if (buttonCount > 1) {
+      return { hasIssue: true, issue: 'Multiple CTAs in hero section' };
+    }
+  }
+  
+  return { hasIssue: false, issue: '' };
 }
