@@ -10,7 +10,7 @@ LUXE AI is a taste-driven autonomous creative system that generates premium digi
 
 - Intent interpretation Hello
 - Structure planning
-- Code generation
+- Code generation hffn
 - Dual critique system
 - Regeneration loop
 - Manual approval
