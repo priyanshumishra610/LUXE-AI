@@ -1,0 +1,52 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+async function getUserId(request: NextRequest): Promise<string | null> {
+  const sessionToken = request.cookies.get('session')?.value;
+  if (!sessionToken) return null;
+
+  const session = await prisma.session.findUnique({
+    where: { token: sessionToken },
+    include: { user: true },
+  });
+
+  if (!session || session.expiresAt < new Date()) {
+    return null;
+  }
+
+  return session.userId;
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const userId = await getUserId(request);
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const decisions = await prisma.decision.findMany({
+      where: {
+        project: { userId },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        projectId: true,
+        approved: true,
+        createdAt: true,
+        critiqueResult: true,
+      },
+    });
+
+    return NextResponse.json(decisions);
+  } catch (error) {
+    console.error('Failed to fetch decisions:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch decisions' },
+      { status: 500 }
+    );
+  }
+}
